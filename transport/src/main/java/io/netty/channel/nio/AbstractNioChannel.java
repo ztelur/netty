@@ -110,6 +110,10 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         return (NioUnsafe) super.unsafe();
     }
 
+    /**
+     * 从这里可以看出NioChannel和SelectableChannel是一一对应的。
+     * @return
+     */
     protected SelectableChannel javaChannel() {
         return ch;
     }
@@ -378,11 +382,18 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         return loop instanceof NioEventLoop;
     }
 
+    /**
+     * 对于NioServerSocketChannel来说，Unsafe这些其实都调用到了本身
+     * @throws Exception
+     */
     @Override
     protected void doRegister() throws Exception {
         boolean selected = false;
         for (;;) {
             try {
+                /**
+                 * javaChannel是NioChannel自己一一对应的成员变量，eventLoop则是对应的ThreadGroup。Selector在其中
+                 */
                 selectionKey = javaChannel().register(eventLoop().unwrappedSelector(), 0, this);
                 return;
             } catch (CancelledKeyException e) {

@@ -278,7 +278,15 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
         return doBind(localAddress);
     }
 
+    /**
+     * 这里的public的方法和doBind的private方法的设计值得学习
+     * @param localAddress
+     * @return
+     */
     private ChannelFuture doBind(final SocketAddress localAddress) {
+        /**
+         * 调用initAndRegister进行初始化和注册
+         */
         final ChannelFuture regFuture = initAndRegister();
         final Channel channel = regFuture.channel();
         if (regFuture.cause() != null) {
@@ -288,6 +296,7 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
         if (regFuture.isDone()) {
             // At this point we know that the registration was complete and successful.
             ChannelPromise promise = channel.newPromise();
+            // 这里进行的是？
             doBind0(regFuture, channel, localAddress, promise);
             return promise;
         } else {
@@ -317,6 +326,10 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     final ChannelFuture initAndRegister() {
         Channel channel = null;
         try {
+            /**
+             * 初始化一个channel，ReflectiveChannelFactory是直接通过反射生成Channel Instance会出现too many open files的问题嘛？
+             * 最终会调用到NioServerSocketChannel的newSocket函数，最终调用java nio的API
+             */
             channel = channelFactory.newChannel();
             init(channel);
         } catch (Throwable t) {
@@ -329,7 +342,7 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
             // as the Channel is not registered yet we need to force the usage of the GlobalEventExecutor
             return new DefaultChannelPromise(new FailedChannel(), GlobalEventExecutor.INSTANCE).setFailure(t);
         }
-
+        // group使用一个线程并使用这个channel去完成注册
         ChannelFuture regFuture = config().group().register(channel);
         if (regFuture.cause() != null) {
             if (channel.isRegistered()) {

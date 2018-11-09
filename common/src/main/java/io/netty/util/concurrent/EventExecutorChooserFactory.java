@@ -27,7 +27,9 @@ public interface EventExecutorChooserFactory {
      * Returns a new {@link EventExecutorChooser}.
      */
     EventExecutorChooser newChooser(EventExecutor[] executors);
-
+    /**
+     * 这个接口，只用在它的父接口中，所以就定义在同一个文件中
+     */
     /**
      * Chooses the next {@link EventExecutor} to use.
      */

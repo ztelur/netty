@@ -251,6 +251,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
     @Override
     public ChannelFuture bind(SocketAddress localAddress, ChannelPromise promise) {
+        // 为什么这里要用Pipeline来进行bind，而register都不一样
         return pipeline.bind(localAddress, promise);
     }
 
@@ -418,6 +419,9 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
     }
 
     /**
+     * 这是默认的Unsafe
+     */
+    /**
      * {@link Unsafe} implementation which sub-classes must extend and use.
      */
     protected abstract class AbstractUnsafe implements Unsafe {
@@ -464,6 +468,9 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 promise.setFailure(new IllegalStateException("registered to an event loop already"));
                 return;
             }
+            /**
+             * channel要和建立的网络类型相互匹配
+             */
             if (!isCompatible(eventLoop)) {
                 promise.setFailure(
                         new IllegalStateException("incompatible event loop type: " + eventLoop.getClass().getName()));
@@ -471,7 +478,9 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             }
 
             AbstractChannel.this.eventLoop = eventLoop;
-
+            /**
+             * 判定当前线程是不是eventLoop内部的线程，如果是，则直接调用register0,否则起一个runnable来进行
+             */
             if (eventLoop.inEventLoop()) {
                 register0(promise);
             } else {
