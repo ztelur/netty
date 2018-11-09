@@ -49,7 +49,7 @@ public class TelnetClientInitializer extends ChannelInitializer<SocketChannel> {
         }
 
         // Add the text line codec combination first,
-        pipeline.addLast(new DelimiterBasedFrameDecoder(8192, Delimiters.lineDelimiter()));
+        //pipeline.addLast(new DelimiterBasedFrameDecoder(8192, Delimiters.lineDelimiter()));
         pipeline.addLast(DECODER);
         pipeline.addLast(ENCODER);
 

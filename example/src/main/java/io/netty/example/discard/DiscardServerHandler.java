@@ -15,8 +15,13 @@
  */
 package io.netty.example.discard;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.util.ReferenceCountUtil;
+
 
 /**
  * Handles a server-side channel.
@@ -26,6 +31,28 @@ public class DiscardServerHandler extends SimpleChannelInboundHandler<Object> {
     @Override
     public void channelRead0(ChannelHandlerContext ctx, Object msg) throws Exception {
         // discard
+        try {
+
+
+
+
+        } finally {
+            ReferenceCountUtil.release(msg);
+        }
+    }
+
+    @Override
+    public void channelActive(final ChannelHandlerContext ctx) throws Exception {
+        final ByteBuf time = ctx.alloc().buffer(4);
+        time.writeInt((int) (System.currentTimeMillis() / 1000L + 2208988800L));
+        final ChannelFuture f = ctx.writeAndFlush(time);
+        f.addListener(new ChannelFutureListener() {
+            @Override
+            public void operationComplete(ChannelFuture channelFuture) throws Exception {
+                assert f == channelFuture;
+                ctx.close();
+            }
+        });
     }
 
     @Override

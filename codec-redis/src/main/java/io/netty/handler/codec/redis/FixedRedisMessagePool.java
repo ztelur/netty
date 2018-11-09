@@ -76,7 +76,7 @@ public final class FixedRedisMessagePool implements RedisMessagePool {
     private final Map<ByteBuf, ErrorRedisMessage> byteBufToErrors;
     private final Map<String, ErrorRedisMessage> stringToErrors;
     private final Map<ByteBuf, IntegerRedisMessage> byteBufToIntegers;
-    private final LongObjectMap<IntegerRedisMessage> longToIntegers;
+    private final LongObjectMa<IntegerRedisMessage> longToIntegers;
     private final LongObjectMap<byte[]> longToByteBufs;
 
     /**

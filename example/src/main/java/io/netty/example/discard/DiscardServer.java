@@ -46,17 +46,20 @@ public final class DiscardServer {
         } else {
             sslCtx = null;
         }
-
+        // 接收incoming connection
         EventLoopGroup bossGroup = new NioEventLoopGroup(1);
+        // worker 具体处理的
         EventLoopGroup workerGroup = new NioEventLoopGroup();
         try {
             ServerBootstrap b = new ServerBootstrap();
             b.group(bossGroup, workerGroup)
+                    // 用来初始化新的channel
              .channel(NioServerSocketChannel.class)
              .handler(new LoggingHandler(LogLevel.INFO))
              .childHandler(new ChannelInitializer<SocketChannel>() {
                  @Override
                  public void initChannel(SocketChannel ch) {
+                     // 有多少个线程，就会生成多少个channel
                      ChannelPipeline p = ch.pipeline();
                      if (sslCtx != null) {
                          p.addLast(sslCtx.newHandler(ch.alloc()));

@@ -37,11 +37,6 @@
     </dependency>
     <dependency>
       <groupId>${project.groupId}</groupId>
-      <artifactId>netty-transport-sctp</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>${project.groupId}</groupId>
       <artifactId>netty-handler</artifactId>
       <version>${project.version}</version>
     </dependency>
@@ -145,6 +140,13 @@
       <groupId>com.sun.activation</groupId>
       <artifactId>javax.activation</artifactId>
     </dependency>
+    <!-- https://mvnrepository.com/artifact/io.netty/netty-transport-sctp -->
+    <dependency>
+      <groupId>io.netty</groupId>
+      <artifactId>netty-transport-sctp</artifactId>
+      <version>4.0.0.Beta1</version>
+    </dependency>
+
   </dependencies>
 
   <build>
@@ -161,8 +163,6 @@
             -classpath %classpath
             ${argLine.leak}
             ${argLine.coverage}
-            ${argLine.example}
-            ${exampleClass}
           </commandlineArgs>
         </configuration>
       </plugin>
