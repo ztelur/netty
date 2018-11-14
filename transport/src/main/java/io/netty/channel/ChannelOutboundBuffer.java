@@ -50,6 +50,10 @@ import static java.lang.Math.min;
  * </p>
  */
 public final class ChannelOutboundBuffer {
+    /**
+     * 是AbstractUnsafe使用的数据结构，用来存储待发送的数据。
+     * 在channel.unsafe实例化时，ChannelOutboundBuffer一起被初始化。每个channel都有一个自己的ChannelOutboundBuffer
+     */
     // Assuming a 64-bit JVM:
     //  - 16 bytes object header
     //  - 8 reference fields
@@ -68,14 +72,23 @@ public final class ChannelOutboundBuffer {
             return new ByteBuffer[1024];
         }
     };
-
+    /**
+     * 绑定的channel
+     */
     private final Channel channel;
 
     // Entry(flushedEntry) --> ... Entry(unflushedEntry) --> ... Entry(tailEntry)
     //
     // The Entry that is the first in the linked-list structure that was flushed
+    /**
+     * 表示下一个要被flush的Entry
+     */
     private Entry flushedEntry;
     // The Entry which is the first unflushed in the linked-list structure
+    /**
+     * 表示下一次要flush截止的Entry
+     *
+     */
     private Entry unflushedEntry;
     // The Entry which represents the tail of the buffer
     private Entry tailEntry;
@@ -89,7 +102,9 @@ public final class ChannelOutboundBuffer {
 
     private static final AtomicLongFieldUpdater<ChannelOutboundBuffer> TOTAL_PENDING_SIZE_UPDATER =
             AtomicLongFieldUpdater.newUpdater(ChannelOutboundBuffer.class, "totalPendingSize");
-
+    /**
+     * 已存储的需要被write到socket发送缓存中的byte大小
+     */
     @SuppressWarnings("UnusedDeclaration")
     private volatile long totalPendingSize;
 
@@ -97,6 +112,9 @@ public final class ChannelOutboundBuffer {
             AtomicIntegerFieldUpdater.newUpdater(ChannelOutboundBuffer.class, "unwritable");
 
     @SuppressWarnings("UnusedDeclaration")
+    /**
+     * 表示当前channel的待发送缓存是否可以继续写入数据
+     */
     private volatile int unwritable;
 
     private volatile Runnable fireChannelWritabilityChangedTask;
@@ -110,6 +128,11 @@ public final class ChannelOutboundBuffer {
      * the message was written.
      */
     public void addMessage(Object msg, int size, ChannelPromise promise) {
+        /**
+         * 将msg封装成Entry对象，并放入单向链表的尾部tailEntry
+         * netty使用基于thread-local的轻量级对象池Recycler对Entry进行回收，避免多次实例化的垃圾回收和开销。
+         */
+
         Entry entry = Entry.newInstance(msg, size, total(msg), promise);
         if (tailEntry == null) {
             flushedEntry = null;
@@ -124,6 +147,9 @@ public final class ChannelOutboundBuffer {
 
         // increment pending bytes after adding message to the unflushed arrays.
         // See https://github.com/netty/netty/issues/1619
+        /**
+         * 更新ChannelOutboundBuffer的totalPendingSize，累加上本次新增的大小
+         */
         incrementPendingOutboundBytes(entry.pendingSize, false);
     }
 
@@ -136,6 +162,12 @@ public final class ChannelOutboundBuffer {
         // where added in the meantime.
         //
         // See https://github.com/netty/netty/issues/2577
+
+        /**
+         * 将ChannelOutboundBuffer的unflushedEntry向后不断移动到tailEntry，操作结束后本次要flush的链表区间就是flushedEntry->unflushedEntry。
+         */
+
+
         Entry entry = unflushedEntry;
         if (entry != null) {
             if (flushedEntry == null) {
@@ -175,6 +207,7 @@ public final class ChannelOutboundBuffer {
             setUnwritable(invokeLater);
         }
     }
+
 
     /**
      * Decrement the pending bytes which will be written at some point.

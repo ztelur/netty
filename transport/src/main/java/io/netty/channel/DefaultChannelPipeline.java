@@ -1066,6 +1066,11 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         return tail.writeAndFlush(msg, promise);
     }
 
+    /**
+     * 发送相关的处理，都有pipeline传给tail来处理，然后再层层上传
+     * @param msg
+     * @return
+     */
     @Override
     public final ChannelFuture writeAndFlush(Object msg) {
         return tail.writeAndFlush(msg);
@@ -1325,6 +1330,9 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         }
     }
 
+    /**
+     * 所有与unsafe的交互都由这个类来进行
+     */
     final class HeadContext extends AbstractChannelHandlerContext
             implements ChannelOutboundHandler, ChannelInboundHandler {
 

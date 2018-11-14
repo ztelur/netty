@@ -512,6 +512,13 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
         return connect(remoteAddress, null, promise);
     }
 
+    /**
+     * 从channelPipline的tail开始到这里
+     * @param remoteAddress
+     * @param localAddress
+     * @param promise
+     * @return
+     */
     @Override
     public ChannelFuture connect(
             final SocketAddress remoteAddress, final SocketAddress localAddress, final ChannelPromise promise) {
@@ -539,6 +546,12 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
         return promise;
     }
 
+    /**
+     * Bootstrap.connect的最终调用到的函数
+     * @param remoteAddress
+     * @param localAddress
+     * @param promise
+     */
     private void invokeConnect(SocketAddress remoteAddress, SocketAddress localAddress, ChannelPromise promise) {
         if (invokeHandler()) {
             try {
@@ -733,6 +746,11 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
         }
     }
 
+    /**
+     * Context会交给Handler进行处理
+     * @param msg
+     * @param promise
+     */
     private void invokeWrite0(Object msg, ChannelPromise promise) {
         try {
             ((ChannelOutboundHandler) handler()).write(this, msg, promise);
@@ -805,6 +823,12 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
         }
     }
 
+    /**
+     * Context会找到下一个context
+     * @param msg
+     * @param flush
+     * @param promise
+     */
     private void write(Object msg, boolean flush, ChannelPromise promise) {
         AbstractChannelHandlerContext next = findContextOutbound();
         final Object m = pipeline.touch(msg, next);

@@ -159,6 +159,12 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
     /**
      * @see #connect()
      */
+    /**
+     * Bootstrap.connect的具体实现
+     * @param remoteAddress
+     * @param localAddress
+     * @return
+     */
     private ChannelFuture doResolveAndConnect(final SocketAddress remoteAddress, final SocketAddress localAddress) {
         final ChannelFuture regFuture = initAndRegister();
         final Channel channel = regFuture.channel();
@@ -167,6 +173,7 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
             if (!regFuture.isSuccess()) {
                 return regFuture;
             }
+
             return doResolveAndConnect0(channel, remoteAddress, localAddress, channel.newPromise());
         } else {
             // Registration future is almost always fulfilled already, but just in case it's not.
@@ -197,8 +204,13 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
                                                final SocketAddress localAddress, final ChannelPromise promise) {
         try {
             final EventLoop eventLoop = channel.eventLoop();
+            /**
+             * Resolves a possibility unresolved SocketAddress.
+             */
             final AddressResolver<SocketAddress> resolver = this.resolver.getResolver(eventLoop);
-
+            /**
+             * 没有support但是可以resolve，也就是该EventLoop的类型是支持该SocketAddress的。
+             */
             if (!resolver.isSupported(remoteAddress) || resolver.isResolved(remoteAddress)) {
                 // Resolver has no idea about what to do with the specified remote address or it's resolved already.
                 doConnect(remoteAddress, localAddress, promise);
@@ -249,6 +261,9 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
             @Override
             public void run() {
                 if (localAddress == null) {
+                    /**
+                     * 调用eventLoop来执行一个runnable
+                     */
                     channel.connect(remoteAddress, connectPromise);
                 } else {
                     channel.connect(remoteAddress, localAddress, connectPromise);
