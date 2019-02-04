@@ -105,8 +105,10 @@ public final class SocketUtils {
     public static SocketChannel accept(final ServerSocketChannel serverSocketChannel) throws IOException {
         try {
             return AccessController.doPrivileged(new PrivilegedExceptionAction<SocketChannel>() {
+
                 @Override
                 public SocketChannel run() throws IOException {
+                    // 调用java 的serverSocketChannel的accept函数
                     return serverSocketChannel.accept();
                 }
             });

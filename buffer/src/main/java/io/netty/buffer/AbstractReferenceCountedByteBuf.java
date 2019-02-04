@@ -25,12 +25,16 @@ import static io.netty.util.internal.ObjectUtil.checkPositive;
 
 /**
  * Abstract base class for {@link ByteBuf} implementations that count references.
+ * 实现引用计数的获取和自身的增加和减少
  */
 public abstract class AbstractReferenceCountedByteBuf extends AbstractByteBuf {
     private static final long REFCNT_FIELD_OFFSET;
     private static final AtomicIntegerFieldUpdater<AbstractReferenceCountedByteBuf> refCntUpdater =
             AtomicIntegerFieldUpdater.newUpdater(AbstractReferenceCountedByteBuf.class, "refCnt");
-
+    /**
+     * 计数器基于 AtomicIntegerFieldUpdater ，为什么不直接用 AtomicInteger ？因为 ByteBuf 对象很多，
+     * 如果都把 int 包一层 AtomicInteger 花销较大，而AtomicIntegerFieldUpdater 只需要一个全局的静态变量。
+     */
     private volatile int refCnt = 1;
 
     static {
@@ -83,7 +87,9 @@ public abstract class AbstractReferenceCountedByteBuf extends AbstractByteBuf {
     }
 
     private ByteBuf retain0(final int increment) {
+        // 增加
         int oldRef = refCntUpdater.getAndAdd(this, increment);
+        // 原有的ref为负数或者increment为负数
         if (oldRef <= 0 || oldRef + increment < oldRef) {
             // Ensure we don't resurrect (which means the refCnt was 0) and also that we encountered an overflow.
             refCntUpdater.getAndAdd(this, -increment);
@@ -113,11 +119,14 @@ public abstract class AbstractReferenceCountedByteBuf extends AbstractByteBuf {
     }
 
     private boolean release0(int decrement) {
+        // 减少
         int oldRef = refCntUpdater.getAndAdd(this, -decrement);
+        // 相等，说明rfc已经是0了，所以进行释放
         if (oldRef == decrement) {
             deallocate();
             return true;
         }
+        // 减少的值得大于 原有 oldRef ，说明“越界”；或者，increment 为负数
         if (oldRef < decrement || oldRef - decrement > oldRef) {
             // Ensure we don't over-release, and avoid underflow.
             refCntUpdater.getAndAdd(this, decrement);

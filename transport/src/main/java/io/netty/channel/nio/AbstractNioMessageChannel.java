@@ -56,7 +56,9 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
     }
 
     private final class NioMessageUnsafe extends AbstractNioUnsafe {
-
+        /**
+         * 新读取的客户端连接数组
+         */
         private final List<Object> readBuf = new ArrayList<Object>();
 
         @Override
@@ -64,7 +66,9 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
             assert eventLoop().inEventLoop();
             final ChannelConfig config = config();
             final ChannelPipeline pipeline = pipeline();
+            // 获得 RecvByteBufAllocator.Handle 对象
             final RecvByteBufAllocator.Handle allocHandle = unsafe().recvBufAllocHandle();
+            // 重置 RecvByteBufAllocator.Handle 对象
             allocHandle.reset(config);
 
             boolean closed = false;
@@ -72,10 +76,13 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
             try {
                 try {
                     do {
+                        // 读取客户端的连接到 readBuf 中
                         int localRead = doReadMessages(readBuf);
+                        // 无可读的客户端连接，结束
                         if (localRead == 0) {
                             break;
                         }
+                        // 读取出错
                         if (localRead < 0) {
                             closed = true;
                             break;
@@ -86,19 +93,23 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
                 } catch (Throwable t) {
                     exception = t;
                 }
-
+                // 循环readBuf数组，触发Channel的read事件到pipeline中
                 int size = readBuf.size();
                 for (int i = 0; i < size; i ++) {
                     readPending = false;
+                    // 通过ServerBootstrapAcceptor,将客户端的Netty NioSocketChannel注册到EventLoop上
                     pipeline.fireChannelRead(readBuf.get(i));
                 }
-                readBuf.clear();
-                allocHandle.readComplete();
-                pipeline.fireChannelReadComplete();
 
+                readBuf.clear();
+                // 读取完成
+                allocHandle.readComplete();
+                // 触发read complete事件到channel中
+                pipeline.fireChannelReadComplete();
+                // 发生异常
                 if (exception != null) {
                     closed = closeOnReadError(exception);
-
+                    // 触发异常信息
                     pipeline.fireExceptionCaught(exception);
                 }
 

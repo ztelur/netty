@@ -23,17 +23,42 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 abstract class PooledByteBuf<T> extends AbstractReferenceCountedByteBuf {
-
+    /**
+     * Recycler处理器，用于回收对象
+     */
     private final Recycler.Handle<PooledByteBuf<T>> recyclerHandle;
-
+    /**
+     * Chunk对象
+     */
     protected PoolChunk<T> chunk;
+    /**
+     * 从chunk对象中分配的内存块所处的位置
+     */
     protected long handle;
+    /**
+     * 内存空间，具体什么样子通过泛型来设置
+     */
     protected T memory;
+    /**
+     * 开始位置
+     */
     protected int offset;
+    /**
+     * 容量
+     */
     protected int length;
+    /**
+     * 占用memory的大小
+     */
     int maxLength;
     PoolThreadCache cache;
+    /**
+     * 临时的ByteBuf对象
+     */
     private ByteBuffer tmpNioBuf;
+    /**
+     * 分配器
+     */
     private ByteBufAllocator allocator;
 
     @SuppressWarnings("unchecked")
@@ -50,6 +75,15 @@ abstract class PooledByteBuf<T> extends AbstractReferenceCountedByteBuf {
         init0(chunk, 0, chunk.offset, length, length, null);
     }
 
+    /**
+     * 初始化方法
+     * @param chunk
+     * @param handle
+     * @param offset
+     * @param length
+     * @param maxLength
+     * @param cache
+     */
     private void init0(PoolChunk<T> chunk, long handle, int offset, int length, int maxLength, PoolThreadCache cache) {
         assert handle >= 0;
         assert chunk != null;
@@ -64,17 +98,24 @@ abstract class PooledByteBuf<T> extends AbstractReferenceCountedByteBuf {
         this.maxLength = maxLength;
         tmpNioBuf = null;
     }
-
     /**
-     * Method must be called before reuse this {@link PooledByteBufAllocator}
+     * 每次重用时，都必须调用该函数
      */
     final void reuse(int maxCapacity) {
+        // 设置最大容量
         maxCapacity(maxCapacity);
+        // 设置引用数为1
         setRefCnt(1);
+        // 重置读写索引为0
         setIndex0(0, 0);
         discardMarks();
     }
 
+    /**
+     * maxLength是占用memory的最大容量，而maxCapacity才是真正的最大容量，当写入量超过maxLength时
+     * 会进行扩容，知道maxCapacity
+     * @return
+     */
     @Override
     public final int capacity() {
         return length;
@@ -82,21 +123,29 @@ abstract class PooledByteBuf<T> extends AbstractReferenceCountedByteBuf {
 
     @Override
     public final ByteBuf capacity(int newCapacity) {
+        // 校验新的容量，不能超过最大容量
         checkNewCapacity(newCapacity);
 
         // If the request capacity does not require reallocation, just update the length of the memory.
+        // 如果chunk是非池化的，当容量相等，无需扩容或者缩小，直接返回
         if (chunk.unpooled) {
             if (newCapacity == length) {
                 return this;
             }
         } else {
+            // chunk是池化的
+            // 扩容
             if (newCapacity > length) {
+                // 小于memory的最大length所以可以不作处理(只需要设置length)，直接返回
                 if (newCapacity <= maxLength) {
                     length = newCapacity;
                     return this;
                 }
+            // 缩容
             } else if (newCapacity < length) {
+                // 大于maxLength的一半，否则就不进行缩容，因为会浪费很多内存。
                 if (newCapacity > maxLength >>> 1) {
+
                     if (maxLength <= 512) {
                         if (newCapacity > maxLength - 16) {
                             length = newCapacity;
@@ -110,10 +159,11 @@ abstract class PooledByteBuf<T> extends AbstractReferenceCountedByteBuf {
                     }
                 }
             } else {
+                // 相等，直接返回
                 return this;
             }
         }
-
+        // 不满足上述条件，重新分配新的内存空间，并将数据复制到其中，并且，释放老的内存空间。
         // Reallocation required.
         chunk.arena.reallocate(this, newCapacity, true);
         return this;
@@ -160,6 +210,9 @@ abstract class PooledByteBuf<T> extends AbstractReferenceCountedByteBuf {
 
     protected abstract ByteBuffer newInternalNioBuffer(T memory);
 
+    /**
+     *  当引用计数为0时，调用该函数，进行内存回收
+     */
     @Override
     protected final void deallocate() {
         if (handle >= 0) {
@@ -167,6 +220,7 @@ abstract class PooledByteBuf<T> extends AbstractReferenceCountedByteBuf {
             this.handle = -1;
             memory = null;
             tmpNioBuf = null;
+            // 释放内存回 Arena 中
             chunk.arena.free(chunk, handle, maxLength, cache);
             chunk = null;
             recycle();

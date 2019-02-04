@@ -428,7 +428,9 @@ public abstract class AbstractByteBuf extends ByteBuf {
 
     @Override
     public int getInt(int index) {
+        // 检查读取是否会超过流量
         checkIndex(index, 4);
+        // 读取int值
         return _getInt(index);
     }
 
@@ -806,8 +808,11 @@ public abstract class AbstractByteBuf extends ByteBuf {
 
     @Override
     public int readInt() {
+        // 校验读取是否会超过可读d段
         checkReadableBytes0(4);
+        // 从readerIndex开始读取Int数据
         int v = _getInt(readerIndex);
+        // readerIndex移动
         readerIndex += 4;
         return v;
     }
@@ -1377,7 +1382,9 @@ public abstract class AbstractByteBuf extends ByteBuf {
     }
 
     protected final void checkIndex(int index, int fieldLength) {
+        // 校验是否可访问
         ensureAccessible();
+        // 校验能否超过容量
         checkIndex0(index, fieldLength);
     }
 

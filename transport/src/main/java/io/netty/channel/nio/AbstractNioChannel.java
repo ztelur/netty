@@ -193,6 +193,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
     }
 
     private void clearReadPending0() {
+        // 移除对读的兴趣
         readPending = false;
         ((AbstractNioUnsafe) unsafe()).removeReadOp();
     }

@@ -139,6 +139,7 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
 
     @Override
     void init(Channel channel) throws Exception {
+        // ServerBootstrap的启动过程
         final Map<ChannelOption<?>, Object> options = options0();
         synchronized (options) {
             setChannelOptions(channel, options, logger);
@@ -165,16 +166,19 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
         synchronized (childAttrs) {
             currentChildAttrs = childAttrs.entrySet().toArray(newAttrArray(0));
         }
-
+        // 添加ChannelInitializer对象到pipeline中，用于初始化ChannelHandler到pipeline上
         p.addLast(new ChannelInitializer<Channel>() {
             @Override
             public void initChannel(final Channel ch) throws Exception {
                 final ChannelPipeline pipeline = ch.pipeline();
+                // 将配置的ChannelHandler到pipeline
                 ChannelHandler handler = config.handler();
                 if (handler != null) {
                     pipeline.addLast(handler);
                 }
-
+                /**
+                 * 添加ServerBootstrapAcceptor到pipeline
+                 */
                 ch.eventLoop().execute(new Runnable() {
                     @Override
                     public void run() {
@@ -209,6 +213,10 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
         return new Map.Entry[size];
     }
 
+    /**
+     * 服务器接收器( acceptor )，负责将接受的客户端的 NioSocketChannel 注册到 EventLoop 中。
+     * 另外，从继承的是 ChannelInboundHandlerAdapter 类，可以看出它是 Inbound 事件处理器。
+     */
     private static class ServerBootstrapAcceptor extends ChannelInboundHandlerAdapter {
 
         private final EventLoopGroup childGroup;
@@ -230,6 +238,9 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
             // not be able to load the class because of the file limit it already reached.
             //
             // See https://github.com/netty/netty/issues/1328
+            /**
+             * 自动恢复接受客户端连接的任务
+             */
             enableAutoReadTask = new Runnable() {
                 @Override
                 public void run() {
@@ -241,20 +252,24 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
         @Override
         @SuppressWarnings("unchecked")
         public void channelRead(ChannelHandlerContext ctx, Object msg) {
+            // 接收的客户端的NioSocketChannel对象
             final Channel child = (Channel) msg;
-
+            // 添加NioSocketChannel的处理器
             child.pipeline().addLast(childHandler);
-
+            // 设置配置项
             setChannelOptions(child, childOptions, logger);
-
+            // 属性
             for (Entry<AttributeKey<?>, Object> e: childAttrs) {
                 child.attr((AttributeKey<Object>) e.getKey()).set(e.getValue());
             }
 
             try {
+                // 注册客户端的NioSocketChannel到work eventloop中
                 childGroup.register(child).addListener(new ChannelFutureListener() {
+
                     @Override
                     public void operationComplete(ChannelFuture future) throws Exception {
+                        // 注册失败，关闭
                         if (!future.isSuccess()) {
                             forceClose(child, future.cause());
                         }
@@ -276,9 +291,12 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
             if (config.isAutoRead()) {
                 // stop accept new connections for 1 second to allow the channel to recover
                 // See https://github.com/netty/netty/issues/1328
+                // 关闭接收新的客户端连接
                 config.setAutoRead(false);
+                // 发起的1秒的延迟任务，恢复重启开启接收新的客户端连接
                 ctx.channel().eventLoop().schedule(enableAutoReadTask, 1, TimeUnit.SECONDS);
             }
+            // 继续传播
             // still let the exceptionCaught event flow through the pipeline to give the user
             // a chance to do something with it
             ctx.fireExceptionCaught(cause);

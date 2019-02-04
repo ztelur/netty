@@ -644,6 +644,10 @@ public final class NioEventLoop extends SingleThreadEventLoop {
 
             // Also check for readOps of 0 to workaround possible JDK bug which may otherwise lead
             // to a spin loop
+            /**
+             * OP_READ和OP_ACCEPT就绪，readyOps = 0是对jdk死循环的处理
+             * NioServerSocketChannel的boss eventloop线程轮询发现新的客户端接入
+             */
             if ((readyOps & (SelectionKey.OP_READ | SelectionKey.OP_ACCEPT)) != 0 || readyOps == 0) {
                 unsafe.read();
             }

@@ -102,17 +102,31 @@ package io.netty.buffer;
 final class PoolChunk<T> implements PoolChunkMetric {
 
     private static final int INTEGER_SIZE_MINUS_ONE = Integer.SIZE - 1;
-
+    /**
+     * 所属的Arena对象
+     */
     final PoolArena<T> arena;
+
     final T memory;
     final boolean unpooled;
     final int offset;
-
+    /**
+     * 分配信息满二叉树
+     */
     private final byte[] memoryMap;
+    /**
+     * 高度信息满二叉树
+     */
     private final byte[] depthMap;
+    /**
+     * PoolSubpage数组
+     */
     private final PoolSubpage<T>[] subpages;
     /** Used to determine if the requested capacity is equal to or greater than pageSize. */
     private final int subpageOverflowMask;
+    /**
+     * Page大小
+     */
     private final int pageSize;
     private final int pageShifts;
     private final int maxOrder;
@@ -123,9 +137,17 @@ final class PoolChunk<T> implements PoolChunkMetric {
     private final byte unusable;
 
     private int freeBytes;
-
+    /**
+     * 所属的chunkList对象
+     */
     PoolChunkList<T> parent;
+    /**
+     * 上一个chunk对象
+     */
     PoolChunk<T> prev;
+    /**
+     * 下一个chunk对象
+     */
     PoolChunk<T> next;
 
     // TODO: Test if adding padding helps under contention

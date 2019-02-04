@@ -35,6 +35,9 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
     }
 
     protected static ByteBuf toLeakAwareBuffer(ByteBuf buf) {
+        /**
+         * SIMPLE情况下创建SimpleLeakAwareByteBuf，而ADVANCED和PARANOID情况下创建AdvancedLeakAwareByteBuf
+         */
         ResourceLeakTracker<ByteBuf> leak;
         switch (ResourceLeakDetector.getLevel()) {
             case SIMPLE:
@@ -57,6 +60,10 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
     }
 
     protected static CompositeByteBuf toLeakAwareBuffer(CompositeByteBuf buf) {
+        /**
+         * SIMPLE情况下创建SimpleLeakAwareCompositeByteBuf，
+         * 而ADVANCED和PARANOID情况下创建AdvancedLeakAwareCompositeByteBuf
+         */
         ResourceLeakTracker<ByteBuf> leak;
         switch (ResourceLeakDetector.getLevel()) {
             case SIMPLE:

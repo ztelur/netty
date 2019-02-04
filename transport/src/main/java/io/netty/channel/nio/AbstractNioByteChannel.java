@@ -131,6 +131,7 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
         @Override
         public final void read() {
             final ChannelConfig config = config();
+            // 如果inputClosedSeenErrorRead = true, 移除SelectionKey.OP_READ时间感兴趣
             if (shouldBreakReadReady(config)) {
                 clearReadPending();
                 return;
@@ -144,12 +145,17 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
             boolean close = false;
             try {
                 do {
+                    // 申请ByteBuf对象
                     byteBuf = allocHandle.allocate(allocator);
+                    // 读取数据，设置最后读取的字节数
                     allocHandle.lastBytesRead(doReadBytes(byteBuf));
+                    // 未读到数据
                     if (allocHandle.lastBytesRead() <= 0) {
                         // nothing was read. release the buffer.
+
                         byteBuf.release();
                         byteBuf = null;
+                        // 小于零，说明对方流已经关闭了
                         close = allocHandle.lastBytesRead() < 0;
                         if (close) {
                             // There is nothing left to read as we received an EOF.
@@ -158,15 +164,17 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
                         break;
                     }
 
+                    // 读取到数据，读取数+localread
                     allocHandle.incMessagesRead(1);
                     readPending = false;
+                    // 触发channel read事件到pipeline中
                     pipeline.fireChannelRead(byteBuf);
                     byteBuf = null;
                 } while (allocHandle.continueReading());
-
+                // 读取完成
                 allocHandle.readComplete();
                 pipeline.fireChannelReadComplete();
-
+                // 关闭客户端
                 if (close) {
                     closeOnRead(pipeline);
                 }
