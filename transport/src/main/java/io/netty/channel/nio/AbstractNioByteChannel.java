@@ -293,6 +293,7 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
 
     protected final void incompleteWrite(boolean setOpWrite) {
         // Did not write completely.
+        // 注册SelectionKey.OP_WRITE
         if (setOpWrite) {
             setOpWrite();
         } else {
@@ -336,6 +337,7 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
             return;
         }
         final int interestOps = key.interestOps();
+        //  注册 SelectionKey.OP_WRITE 事件的感兴趣
         if ((interestOps & SelectionKey.OP_WRITE) == 0) {
             key.interestOps(interestOps | SelectionKey.OP_WRITE);
         }

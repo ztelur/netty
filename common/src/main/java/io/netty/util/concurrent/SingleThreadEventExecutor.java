@@ -53,12 +53,14 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
 
     private static final InternalLogger logger =
             InternalLoggerFactory.getInstance(SingleThreadEventExecutor.class);
-
-    private static final int ST_NOT_STARTED = 1;
-    private static final int ST_STARTED = 2;
-    private static final int ST_SHUTTING_DOWN = 3;
-    private static final int ST_SHUTDOWN = 4;
-    private static final int ST_TERMINATED = 5;
+    /**
+     * 线程的几种状态
+     */
+    private static final int ST_NOT_STARTED = 1; // 未开始
+    private static final int ST_STARTED = 2; // 已开始
+    private static final int ST_SHUTTING_DOWN = 3; // 正在关闭
+    private static final int ST_SHUTDOWN = 4; // 已关闭
+    private static final int ST_TERMINATED = 5; //已经终止
 
     private static final Runnable WAKEUP_TASK = new Runnable() {
         @Override
@@ -72,27 +74,56 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
             // Do nothing.
         }
     };
-
+    /**
+     * status的原子修改器
+     */
     private static final AtomicIntegerFieldUpdater<SingleThreadEventExecutor> STATE_UPDATER =
             AtomicIntegerFieldUpdater.newUpdater(SingleThreadEventExecutor.class, "state");
+    /**
+     * thread
+     */
     private static final AtomicReferenceFieldUpdater<SingleThreadEventExecutor, ThreadProperties> PROPERTIES_UPDATER =
             AtomicReferenceFieldUpdater.newUpdater(
                     SingleThreadEventExecutor.class, ThreadProperties.class, "threadProperties");
-
+    /**
+     * 任务队列
+     */
     private final Queue<Runnable> taskQueue;
-
+    /**
+     * 线程
+     */
     private volatile Thread thread;
     @SuppressWarnings("unused")
+    /**
+     * 线程属性
+     */
     private volatile ThreadProperties threadProperties;
+    /**
+     * 执行器
+     */
     private final Executor executor;
+    /**
+     * 线程是否被打断
+     */
     private volatile boolean interrupted;
 
     private final Semaphore threadLock = new Semaphore(0);
     private final Set<Runnable> shutdownHooks = new LinkedHashSet<Runnable>();
+    /**
+     * 添加任务时，是否执行唤醒线程
+     */
     private final boolean addTaskWakesUp;
+    /**
+     * 最大等待执行任务数量，taskQueue的size
+     */
     private final int maxPendingTasks;
+    /**
+     * 拒绝执行处理器
+     */
     private final RejectedExecutionHandler rejectedExecutionHandler;
-
+    /**
+     * 最后执行时间
+     */
     private long lastExecutionTime;
 
     @SuppressWarnings({ "FieldMayBeFinal", "unused" })
@@ -318,7 +349,9 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
         if (task == null) {
             throw new NullPointerException("task");
         }
+        // 添加到任务队列
         if (!offerTask(task)) {
+            // 添加失败，则拒绝任务
             reject(task);
         }
     }
@@ -773,16 +806,19 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
         if (task == null) {
             throw new NullPointerException("task");
         }
-
+        // 判断当前是否在EventLoop的线程中
         boolean inEventLoop = inEventLoop();
+        // 添加到任务队列
         addTask(task);
         if (!inEventLoop) {
+            // 创建线程 启动 EventLoop 独占的线程 thread属性
             startThread();
+            // 如果已经结束，则移除任务，并且拒绝
             if (isShutdown() && removeTask(task)) {
                 reject();
             }
         }
-
+        // 唤醒线程
         if (!addTaskWakesUp && wakesUpForTask(task)) {
             wakeup(inEventLoop);
         }
@@ -869,6 +905,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
     private static final long SCHEDULE_PURGE_INTERVAL = TimeUnit.SECONDS.toNanos(1);
 
     private void startThread() {
+        // 对状态进行转换设置
         if (state == ST_NOT_STARTED) {
             if (STATE_UPDATER.compareAndSet(this, ST_NOT_STARTED, ST_STARTED)) {
                 try {
@@ -884,16 +921,21 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
     private void doStartThread() {
         assert thread == null;
         executor.execute(new Runnable() {
+
             @Override
             public void run() {
+                // 记录当前线程
                 thread = Thread.currentThread();
+                // 当前线程已经被标记打断，则进行打断操作。
                 if (interrupted) {
                     thread.interrupt();
                 }
 
                 boolean success = false;
+                // 更新最后执行时间
                 updateLastExecutionTime();
                 try {
+                    // 执行任务
                     SingleThreadEventExecutor.this.run();
                     success = true;
                 } catch (Throwable t) {

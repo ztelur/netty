@@ -57,11 +57,19 @@ public final class NioEventLoop extends SingleThreadEventLoop {
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(NioEventLoop.class);
 
     private static final int CLEANUP_INTERVAL = 256; // XXX Hard-coded value, but won't need customization.
-
+    /**
+     * 是否禁用SelectionKey的优化，默认开启
+     */
     private static final boolean DISABLE_KEYSET_OPTIMIZATION =
             SystemPropertyUtil.getBoolean("io.netty.noKeySetOptimization", false);
 
+    /**
+     * 少于该N值，不开启空轮询重建新的Selector对象的功能
+     */
     private static final int MIN_PREMATURE_SELECTOR_RETURNS = 3;
+    /**
+     * NIO Selector 空轮询该 N 次后，重建新的 Selector 对象
+     */
     private static final int SELECTOR_AUTO_REBUILD_THRESHOLD;
 
     private final IntSupplier selectNowSupplier = new IntSupplier() {
@@ -77,6 +85,9 @@ public final class NioEventLoop extends SingleThreadEventLoop {
     // - http://bugs.sun.com/view_bug.do?bug_id=6427854
     // - https://github.com/netty/netty/issues/203
     static {
+        /**
+         * 解决Selector#open()方法
+         */
         final String key = "sun.nio.ch.bugLevel";
         final String buglevel = SystemPropertyUtil.get(key);
         if (buglevel == null) {
@@ -107,12 +118,23 @@ public final class NioEventLoop extends SingleThreadEventLoop {
     }
 
     /**
+     * 包装的Selector对象，经过优化
+     */
+    /**
      * The NIO {@link Selector}.
      */
     private Selector selector;
+    /**
+     * 未包装的Selector
+     */
     private Selector unwrappedSelector;
+    /**
+     * 注册的SelectionKey集合，Netty自己实现，经过优化
+     */
     private SelectedSelectionKeySet selectedKeys;
-
+    /**
+     * SelectorProvider对象，用于创建Selector
+     */
     private final SelectorProvider provider;
 
     /**
@@ -121,12 +143,25 @@ public final class NioEventLoop extends SingleThreadEventLoop {
      * the select method and the select method will block for that time unless
      * waken up.
      */
+    /**
+     * 唤醒标记。因为唤醒方法 {@link Selector#wakeup()} 开销比较大，通过该标识，减少调用
+     */
     private final AtomicBoolean wakenUp = new AtomicBoolean();
-
+    /**
+     * Selector策略
+     */
     private final SelectStrategy selectStrategy;
-
+    /**
+     * 处理Channel的就绪的IO事件，占处理任务的总事件比率
+     */
     private volatile int ioRatio = 50;
+    /**
+     * 取消SelectionKey的数量
+     */
     private int cancelledKeys;
+    /**
+     * 是否需要再次Select Selector对象
+     */
     private boolean needsToSelectAgain;
 
     NioEventLoop(NioEventLoopGroup parent, Executor executor, SelectorProvider selectorProvider,
@@ -265,6 +300,10 @@ public final class NioEventLoop extends SingleThreadEventLoop {
     @Override
     protected Queue<Runnable> newTaskQueue(int maxPendingTasks) {
         // This event loop never calls takeTask()
+        /**
+         * mpsc 是 multiple producers and a single consumer 的缩写
+         * mpsc 是对多线程生产任务，单线程消费任务的消费，恰好符合 NioEventLoop 的情况。
+         */
         return maxPendingTasks == Integer.MAX_VALUE ? PlatformDependent.<Runnable>newMpscQueue()
                                                     : PlatformDependent.<Runnable>newMpscQueue(maxPendingTasks);
     }

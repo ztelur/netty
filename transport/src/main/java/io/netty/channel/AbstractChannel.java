@@ -245,6 +245,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
     @Override
     public Channel flush() {
+        // 也是直接调用pipeline的flush，让消息在pipeline中传递
         pipeline.flush();
         return this;
     }
@@ -286,6 +287,11 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
         return this;
     }
 
+    /**
+     * 从channel写入，会从pipeline中进行write，将write事件在pipeline上进行传播，最终写到head节点上。
+     * @param msg
+     * @return
+     */
     @Override
     public ChannelFuture write(Object msg) {
         return pipeline.write(msg);
@@ -699,14 +705,17 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
         private void close(final ChannelPromise promise, final Throwable cause,
                            final ClosedChannelException closeCause, final boolean notify) {
+            // 设置promise不可取消
             if (!promise.setUncancellable()) {
                 return;
             }
-
+            // 如果已经开始关闭
             if (closeInitiated) {
+                // 关闭已经完成，直接通知 Promise 对象
                 if (closeFuture.isDone()) {
                     // Closed already.
                     safeSetSuccess(promise);
+                    // 关闭未完成，通过监听器通知 Promise 对象
                 } else if (!(promise instanceof VoidChannelPromise)) { // Only needed if no VoidChannelPromise.
                     // This means close() was called before so we just register a listener and return
                     closeFuture.addListener(new ChannelFutureListener() {
@@ -720,28 +729,35 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             }
 
             closeInitiated = true;
-
+            // 获得 Channel 是否激活
             final boolean wasActive = isActive();
+            // 标记 outboundBuffer 为空
             final ChannelOutboundBuffer outboundBuffer = this.outboundBuffer;
             this.outboundBuffer = null; // Disallow adding any messages and flushes to outboundBuffer.
+            // 执行准备关闭
             Executor closeExecutor = prepareToClose();
+            // 若 closeExecutor 非空
             if (closeExecutor != null) {
                 closeExecutor.execute(new Runnable() {
                     @Override
                     public void run() {
                         try {
+                            // 在 closeExecutor 中，执行关闭
                             // Execute the close.
                             doClose0(promise);
                         } finally {
+                            // 在 EventLoop 中，执行
                             // Call invokeLater so closeAndDeregister is executed in the EventLoop again!
                             invokeLater(new Runnable() {
                                 @Override
                                 public void run() {
                                     if (outboundBuffer != null) {
+                                        // 写入数据( 消息 )到对端失败，通知相应数据对应的 Promise 失败。
                                         // Fail all the queued messages
                                         outboundBuffer.failFlushed(cause, notify);
                                         outboundBuffer.close(closeCause);
                                     }
+                                    // 执行取消注册，并触发 Channel Inactive 事件到 pipeline 中
                                     fireChannelInactiveAndDeregister(wasActive);
                                 }
                             });
@@ -882,6 +898,9 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
              * 使用ChannelOutboundBuffer来发送数据
              */
             ChannelOutboundBuffer outboundBuffer = this.outboundBuffer;
+            /**
+             * 当内存队列为null,一般是Channel已经关闭，所以通知promise异常结果
+             */
             if (outboundBuffer == null) {
                 // If the outboundBuffer is null we know the channel was closed and so
                 // need to fail the future right away. If it is not null the handling of the rest
@@ -899,6 +918,8 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                  * 内部调用AbstractNioByteChannel.filterOutboundMessage(Object msg)
                  * 方法，如果msg是ByteBuf类型，则将其转换为DirectByteBuf的实现。（调用ByteBufAllocator.directBuffer(initialCapacity)分配一块直接缓存空间并将原msg中的字节流放入）
                  *
+                 * 不同的channel发送的对象不同，所以不同的AbstractChannel子类，该函数的实现不同。
+                 * 进行过滤，如果不是正确的类型，那就就不在传递
                  */
                 msg = filterOutboundMessage(msg);
                 // 计算大小
@@ -911,19 +932,19 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 ReferenceCountUtil.release(msg);
                 return;
             }
-
+            // 写入消息到内存队列
             outboundBuffer.addMessage(msg, size, promise);
         }
 
         @Override
         public final void flush() {
             assertEventLoop();
-
+            // 内存队列为null，则一般都是channel已经关闭，所以直接返回
             ChannelOutboundBuffer outboundBuffer = this.outboundBuffer;
             if (outboundBuffer == null) {
                 return;
             }
-
+            // 标记内存队列，然后进行flush
             outboundBuffer.addFlush();
             /**
              * 这里会进行flush
@@ -933,18 +954,22 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
         @SuppressWarnings("deprecation")
         protected void flush0() {
+            // 如果正在flush，所以直接返回
             if (inFlush0) {
                 // Avoid re-entrance
                 return;
             }
-
+            /**
+             * 内存队列为null，一般是Channel已经关闭了，所以直接返回
+             */
             final ChannelOutboundBuffer outboundBuffer = this.outboundBuffer;
             if (outboundBuffer == null || outboundBuffer.isEmpty()) {
                 return;
             }
 
+            // 标记正在flush中
             inFlush0 = true;
-
+            // 尚未激活，通知flush失败
             // Mark all pending write requests as failure if the channel is inactive.
             if (!isActive()) {
                 try {
@@ -955,11 +980,13 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                         outboundBuffer.failFlushed(FLUSH0_CLOSED_CHANNEL_EXCEPTION, false);
                     }
                 } finally {
+                    // 标记不在flush
                     inFlush0 = false;
                 }
                 return;
             }
 
+            // 真正执行写入到对面
             try {
                 doWrite(outboundBuffer);
             } catch (Throwable t) {

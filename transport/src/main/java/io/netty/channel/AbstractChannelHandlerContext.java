@@ -724,15 +724,19 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
         }
 
         try {
+            // 判断是非为合法的Promise对象
             if (isNotValidPromise(promise, true)) {
+                // 释放消息数据的相关资源
                 ReferenceCountUtil.release(msg);
                 // cancelled
                 return promise;
             }
         } catch (RuntimeException e) {
+            // 发生异常
             ReferenceCountUtil.release(msg);
             throw e;
         }
+        // 写入消息(内存)到内存队列
         write(msg, false, promise);
 
         return promise;
@@ -761,8 +765,10 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
 
     @Override
     public ChannelHandlerContext flush() {
+        // 获取下一个outbound
         final AbstractChannelHandlerContext next = findContextOutbound();
         EventExecutor executor = next.executor();
+        // 如果在EventLoop的线程中
         if (executor.inEventLoop()) {
             next.invokeFlush();
         } else {
@@ -830,22 +836,29 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
      * @param promise
      */
     private void write(Object msg, boolean flush, ChannelPromise promise) {
+        // 获得下一个outbound节点
         AbstractChannelHandlerContext next = findContextOutbound();
+        // 记录Record记录
         final Object m = pipeline.touch(msg, next);
         EventExecutor executor = next.executor();
+        // 在EventLoop的线程中
         if (executor.inEventLoop()) {
+            // 执行下一个writeAndFlush事件到下一个节点
             if (flush) {
                 next.invokeWriteAndFlush(m, promise);
             } else {
+            // 只进行write操作。
                 next.invokeWrite(m, promise);
             }
         } else {
             final AbstractWriteTask task;
+            // 创建一步任务
             if (flush) {
                 task = WriteAndFlushTask.newInstance(next, m, promise);
             }  else {
                 task = WriteTask.newInstance(next, m, promise);
             }
+            // 提交到EventLoop的线程中，执行该任务
             if (!safeExecute(executor, task, promise, m)) {
                 // We failed to submit the AbstractWriteTask. We need to cancel it so we decrement the pending bytes
                 // and put it back in the Recycler for re-use later.
@@ -1060,17 +1073,42 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
 
     abstract static class AbstractWriteTask implements Runnable {
 
+        /**
+         * 提交任务时，是否计算AbstractTask对象的自身占用内存大小
+         */
         private static final boolean ESTIMATE_TASK_SIZE_ON_SUBMIT =
                 SystemPropertyUtil.getBoolean("io.netty.transport.estimateSizeOnSubmit", true);
 
+        /**
+         * 每个AbstractWriteTask对象自身占的内存大小
+         * 对象头16字节，3个对象引用 3 * 8 = 24字节
+         * 1个int 4字节
+         * padding 补齐8字节的整倍数，所以4字节
+         * 一共48字节
+         */
         // Assuming a 64-bit JVM, 16 bytes object header, 3 reference fields and one int field, plus alignment
         private static final int WRITE_TASK_OVERHEAD =
                 SystemPropertyUtil.getInt("io.netty.transport.writeTaskSizeOverhead", 48);
-
+        /**
+         * Recycler 是 Netty 用来实现对象池的工具类。在网络通信中，写入是非常频繁的操作，
+         * 因此通过 Recycler 重用 AbstractWriteTask 对象，减少对象的频繁创建，降低 GC 压力，提升性能。
+         */
         private final Recycler.Handle<AbstractWriteTask> handle;
+        /**
+         * pipeline中的节点
+         */
         private AbstractChannelHandlerContext ctx;
+        /**
+         * 数据
+         */
         private Object msg;
+        /**
+         * promise
+         */
         private ChannelPromise promise;
+        /**
+         * 对象大小
+         */
         private int size;
 
         @SuppressWarnings("unchecked")
@@ -1095,9 +1133,12 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
         @Override
         public final void run() {
             try {
+                // 减少 ChannelOutboundBuffer 的 totalPendingSize 属性 <1>
                 decrementPendingOutboundBytes();
+                // 执行 write 事件到下一个节点
                 write(ctx, msg, promise);
             } finally {
+                // 重新收回
                 recycle();
             }
         }

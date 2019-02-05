@@ -382,9 +382,12 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
     @Override
     protected void doWrite(ChannelOutboundBuffer in) throws Exception {
         SocketChannel ch = javaChannel();
+        // 获得写入的自旋锁
         int writeSpinCount = config().getWriteSpinCount();
         do {
+            // 内存队列为空，结束循环,直接返回
             if (in.isEmpty()) {
+                // 取消对OP_WRITE的感兴趣
                 // All written so clear OP_WRITE
                 clearOpWrite();
                 // Directly return here so incompleteWrite(...) is not called.
@@ -392,10 +395,13 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
             }
 
             // Ensure the pending writes are made of ByteBufs only.
+            // 获得每次写入的最大字节数
             int maxBytesPerGatheringWrite = ((NioSocketChannelConfig) config).getMaxBytesPerGatheringWrite();
+            // 从内存队列中获取bytebuffer的数组
             ByteBuffer[] nioBuffers = in.nioBuffers(1024, maxBytesPerGatheringWrite);
+            // 写入个数
             int nioBufferCnt = in.nioBufferCount();
-
+            // 写入ByteBuffer数组，
             // Always us nioBuffers() to workaround data-corruption.
             // See https://github.com/netty/netty/issues/2761
             switch (nioBufferCnt) {
@@ -409,13 +415,18 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
                     // to check if the total size of all the buffers is non-zero.
                     ByteBuffer buffer = nioBuffers[0];
                     int attemptedBytes = buffer.remaining();
+                    // 执行NIO Write调用，写入单个ByteBuffer对象到端
                     final int localWrittenBytes = ch.write(buffer);
+                    // 写入字节小于等于0，说明NIO Channel不可写，所以注册OP_WRITE，等待可写，并且结束循环
                     if (localWrittenBytes <= 0) {
                         incompleteWrite(true);
                         return;
                     }
+                    // 调整每次写入的最大字数
                     adjustMaxBytesPerGatheringWrite(attemptedBytes, localWrittenBytes, maxBytesPerGatheringWrite);
+                    // 从内存队列中，移除已经写入的s数据
                     in.removeBytes(localWrittenBytes);
+                    // 写入次数--
                     --writeSpinCount;
                     break;
                 }
@@ -438,7 +449,7 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
                 }
             }
         } while (writeSpinCount > 0);
-
+        // 不可写，注册OP_WRITE
         incompleteWrite(writeSpinCount < 0);
     }
 
@@ -457,6 +468,7 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
                     // SO_LINGER handling.
                     // See https://github.com/netty/netty/issues/4449
                     doDeregister();
+                    // 返回 GlobalEventExecutor 对象
                     return GlobalEventExecutor.INSTANCE;
                 }
             } catch (Throwable ignore) {

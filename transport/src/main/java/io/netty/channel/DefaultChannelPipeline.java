@@ -1051,6 +1051,11 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         return this;
     }
 
+    /**
+     * channel写入的信息，从tail开始传递
+     * @param msg
+     * @return
+     */
     @Override
     public final ChannelFuture write(Object msg) {
         return tail.write(msg);
@@ -1269,6 +1274,9 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         }
     }
 
+    /**
+     * Default下的定义
+     */
     // A special catch-all handler that handles both bytes and messages.
     final class TailContext extends AbstractChannelHandlerContext implements ChannelInboundHandler {
 
@@ -1396,6 +1404,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
 
         @Override
         public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+            //AbstractUnsafe来进行写入到内存队列中
             unsafe.write(msg, promise);
         }
 
