@@ -29,7 +29,9 @@ import java.util.concurrent.TimeUnit;
  * Abstract base class for {@link EventExecutor}s that want to support scheduling.
  */
 public abstract class AbstractScheduledEventExecutor extends AbstractEventExecutor {
-
+    /**
+     * 定时任务排序器 所以队列首个任务，就是第一个需要执行的定时任务。
+     */
     private static final Comparator<ScheduledFutureTask<?>> SCHEDULED_FUTURE_TASK_COMPARATOR =
             new Comparator<ScheduledFutureTask<?>>() {
                 @Override
@@ -37,7 +39,9 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
                     return o1.compareTo(o2);
                 }
             };
-
+    /**
+     * 定时任务的队列
+     */
     PriorityQueue<ScheduledFutureTask<?>> scheduledTaskQueue;
 
     protected AbstractScheduledEventExecutor() {
@@ -143,6 +147,13 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
         return scheduledTask != null && scheduledTask.deadlineNanos() <= nanoTime();
     }
 
+    /**
+     * 提交定时任务
+     * @param command
+     * @param delay
+     * @param unit
+     * @return
+     */
     @Override
     public ScheduledFuture<?> schedule(Runnable command, long delay, TimeUnit unit) {
         ObjectUtil.checkNotNull(command, "command");
@@ -227,8 +238,10 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
 
     <V> ScheduledFuture<V> schedule(final ScheduledFutureTask<V> task) {
         if (inEventLoop()) {
+            // 添加到定时任务中
             scheduledTaskQueue().add(task);
         } else {
+            // 通过eventloop线程，添加到定时任务队列中
             execute(new Runnable() {
                 @Override
                 public void run() {

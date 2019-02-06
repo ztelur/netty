@@ -27,7 +27,13 @@ import java.util.concurrent.atomic.AtomicLong;
 
 @SuppressWarnings("ComparableImplementedButEqualsNotOverridden")
 final class ScheduledFutureTask<V> extends PromiseTask<V> implements ScheduledFuture<V>, PriorityQueueNode {
+    /**
+     * 任务序号生成器，通过 AtomicLong 实现递增发号
+     */
     private static final AtomicLong nextTaskId = new AtomicLong();
+    /**
+     * 定时任务时间起点,因为是定时调度，我改了系统时间也没关系存的是距离下次调度还要多长时间
+     */
     private static final long START_TIME = System.nanoTime();
 
     static long nanoTime() {
@@ -39,12 +45,20 @@ final class ScheduledFutureTask<V> extends PromiseTask<V> implements ScheduledFu
         // Guard against overflow
         return deadlineNanos < 0 ? Long.MAX_VALUE : deadlineNanos;
     }
-
+    // 任务编号
     private final long id = nextTaskId.getAndIncrement();
+    /**
+     * 任务执行周期
+     * =0 只执行一次
+     * >0 按照计划执行时间
+     * <0 按照实际执行时间
+     */
     private long deadlineNanos;
     /* 0 - no repeat, >0 - repeat at fixed rate, <0 - repeat with fixed delay */
     private final long periodNanos;
-
+    /**
+     * 队伍编号
+     */
     private int queueIndex = INDEX_NOT_IN_QUEUE;
 
     ScheduledFutureTask(
@@ -84,10 +98,19 @@ final class ScheduledFutureTask<V> extends PromiseTask<V> implements ScheduledFu
         return deadlineNanos;
     }
 
+    /**
+     * 距离当前时间，还要多久可执行。若为负数，直接返回 0
+     * @return
+     */
     public long delayNanos() {
         return Math.max(0, deadlineNanos() - nanoTime());
     }
 
+    /**
+     * 距离指定时间，还要多久可执行。若为负数，直接返回 0
+     * @param currentTimeNanos
+     * @return
+     */
     public long delayNanos(long currentTimeNanos) {
         return Math.max(0, deadlineNanos() - (currentTimeNanos - START_TIME));
     }
@@ -97,6 +120,11 @@ final class ScheduledFutureTask<V> extends PromiseTask<V> implements ScheduledFu
         return unit.convert(delayNanos(), TimeUnit.NANOSECONDS);
     }
 
+    /**
+     * 用于队列( ScheduledFutureTask 使用 PriorityQueue 作为优先级队列 )排序
+     * @param o
+     * @return
+     */
     @Override
     public int compareTo(Delayed o) {
         if (this == o) {
@@ -120,25 +148,36 @@ final class ScheduledFutureTask<V> extends PromiseTask<V> implements ScheduledFu
 
     @Override
     public void run() {
+
         assert executor().inEventLoop();
         try {
             if (periodNanos == 0) {
+                // 设置任务不可取消
                 if (setUncancellableInternal()) {
+                    // 执行任务
                     V result = task.call();
+                    // 通知任务执行成功
                     setSuccessInternal(result);
                 }
             } else {
+                /**
+                 * 判断任务并未取消
+                 */
                 // check if is done as it may was cancelled
                 if (!isCancelled()) {
+                    // 执行任务
                     task.call();
                     if (!executor().isShutdown()) {
+                        // 计算下次执行时间
                         long p = periodNanos;
                         if (p > 0) {
                             deadlineNanos += p;
                         } else {
                             deadlineNanos = nanoTime() - p;
                         }
+                        // 判断任务并未取消
                         if (!isCancelled()) {
+                            // 重新添加到任务队列，等待下次定时执行
                             // scheduledTaskQueue can never be null as we lazy init it before submit the task!
                             Queue<ScheduledFutureTask<?>> scheduledTaskQueue =
                                     ((AbstractScheduledEventExecutor) executor()).scheduledTaskQueue;
@@ -149,6 +188,7 @@ final class ScheduledFutureTask<V> extends PromiseTask<V> implements ScheduledFu
                 }
             }
         } catch (Throwable cause) {
+            // 发生异常，通知任务失败
             setFailureInternal(cause);
         }
     }
@@ -161,12 +201,13 @@ final class ScheduledFutureTask<V> extends PromiseTask<V> implements ScheduledFu
     @Override
     public boolean cancel(boolean mayInterruptIfRunning) {
         boolean canceled = super.cancel(mayInterruptIfRunning);
+        // 取消成功，移除定时任务队列
         if (canceled) {
             ((AbstractScheduledEventExecutor) executor()).removeScheduled(this);
         }
         return canceled;
     }
-
+    // 移除任务
     boolean cancelWithoutRemove(boolean mayInterruptIfRunning) {
         return super.cancel(mayInterruptIfRunning);
     }

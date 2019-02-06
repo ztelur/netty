@@ -21,12 +21,18 @@ import io.netty.util.IntSupplier;
  * Default select strategy.
  */
 final class DefaultSelectStrategy implements SelectStrategy {
+    /**
+     * 单例
+     */
     static final SelectStrategy INSTANCE = new DefaultSelectStrategy();
 
     private DefaultSelectStrategy() { }
 
     @Override
     public int calculateStrategy(IntSupplier selectSupplier, boolean hasTasks) throws Exception {
+        /**
+         * 如果有hasTasks，则调用selectSupplier，返回当前channel新增的IO就绪事件数量
+         */
         return hasTasks ? selectSupplier.get() : SelectStrategy.SELECT;
     }
 }

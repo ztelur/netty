@@ -21,12 +21,18 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
+/**
+ * 已经select的NIO SelectionKey的集合
+ *
+ */
 final class SelectedSelectionKeySet extends AbstractSet<SelectionKey> {
-
+    // SelectionKey的数组
     SelectionKey[] keys;
+    // 数组可读大小
     int size;
 
     SelectedSelectionKeySet() {
+        // 默认1024
         keys = new SelectionKey[1024];
     }
 
@@ -35,8 +41,9 @@ final class SelectedSelectionKeySet extends AbstractSet<SelectionKey> {
         if (o == null) {
             return false;
         }
-
+        // 添加到数组
         keys[size++] = o;
+        // 超过数组上限，进行扩容
         if (size == keys.length) {
             increaseCapacity();
         }
@@ -94,6 +101,7 @@ final class SelectedSelectionKeySet extends AbstractSet<SelectionKey> {
     }
 
     private void increaseCapacity() {
+        // 两倍扩容
         SelectionKey[] newKeys = new SelectionKey[keys.length << 1];
         System.arraycopy(keys, 0, newKeys, 0, size);
         keys = newKeys;

@@ -15,6 +15,9 @@
  */
 package io.netty.channel;
 
+/**
+ * 定义了所有 Inbound 事件对应的方法
+ */
 public interface ChannelInboundInvoker {
 
     /**

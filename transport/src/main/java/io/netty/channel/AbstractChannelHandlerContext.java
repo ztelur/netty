@@ -39,7 +39,9 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
         implements ChannelHandlerContext, ResourceLeakHint {
 
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(AbstractChannelHandlerContext.class);
+    // 上一个节点
     volatile AbstractChannelHandlerContext next;
+    // 下一个节点
     volatile AbstractChannelHandlerContext prev;
 
     private static final AtomicIntegerFieldUpdater<AbstractChannelHandlerContext> HANDLER_STATE_UPDATER =
@@ -47,40 +49,53 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
 
     /**
      * {@link ChannelHandler#handlerAdded(ChannelHandlerContext)} is about to be called.
+     * 添加准备中
      */
     private static final int ADD_PENDING = 1;
     /**
      * {@link ChannelHandler#handlerAdded(ChannelHandlerContext)} was called.
+     * 已经添加
      */
     private static final int ADD_COMPLETE = 2;
     /**
      * {@link ChannelHandler#handlerRemoved(ChannelHandlerContext)} was called.
+     * 已经移除
      */
     private static final int REMOVE_COMPLETE = 3;
     /**
      * Neither {@link ChannelHandler#handlerAdded(ChannelHandlerContext)}
      * nor {@link ChannelHandler#handlerRemoved(ChannelHandlerContext)} was called.
+     * 初始化
      */
     private static final int INIT = 0;
-
+    // 是否为inbound或者outbound
     private final boolean inbound;
     private final boolean outbound;
+    // 所属pipeline
     private final DefaultChannelPipeline pipeline;
+    // 名字
     private final String name;
+    // 是否使用有序的 EventExecutor
     private final boolean ordered;
 
     // Will be set to null if no child executor should be used, otherwise it will be set to the
     // child executor.
+    // EventExecutor 对象
     final EventExecutor executor;
+    // 成功的 Promise 对象
     private ChannelFuture succeededFuture;
 
     // Lazily instantiated tasks used to trigger events to a handler with different executor.
     // There is no need to make this volatile as at worse it will just create a few more instances then needed.
+    // 执行 Channel ReadComplete 事件的任务
     private Runnable invokeChannelReadCompleteTask;
+    // 执行 Channel Read 事件的任务
     private Runnable invokeReadTask;
+    // 执行 Channel WritableStateChanged 事件的任务
     private Runnable invokeChannelWritableStateChangedTask;
+    // 执行 flush 事件的任务
     private Runnable invokeFlushTask;
-
+    // 处理器状态
     private volatile int handlerState = INIT;
 
     AbstractChannelHandlerContext(DefaultChannelPipeline pipeline, EventExecutor executor, String name,
@@ -109,6 +124,11 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
         return channel().config().getAllocator();
     }
 
+    /**
+     * 如果未设置子执行器，则使用 Channel 的 EventLoop 作为执行器。
+     * 😈 一般情况下，我们可以忽略子执行器的逻辑，也就是说，可以直接认为是使用 Channel 的 EventLoop 作为执行器
+     * @return
+     */
     @Override
     public EventExecutor executor() {
         if (executor == null) {
@@ -189,12 +209,21 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
 
     @Override
     public ChannelHandlerContext fireChannelActive() {
+        /**
+         * 调用下一个 Inbound 节点的 Channel active 方法
+         */
         invokeChannelActive(findContextInbound());
         return this;
     }
 
     static void invokeChannelActive(final AbstractChannelHandlerContext next) {
+        /**
+         * 获得下一个 Inbound 节点的执行器
+         */
         EventExecutor executor = next.executor();
+        /**
+         * 调用下一个 Inbound 节点的 Channel active 方法
+         */
         if (executor.inEventLoop()) {
             next.invokeChannelActive();
         } else {
@@ -208,8 +237,14 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
     }
 
     private void invokeChannelActive() {
+        /**
+         * // 判断是否符合的 ChannelHandler
+         */
         if (invokeHandler()) {
             try {
+                /**
+                 * 调用该 ChannelHandler 的 Channel active 方法
+                 */
                 ((ChannelInboundHandler) handler()).channelActive(this);
             } catch (Throwable t) {
                 notifyHandlerException(t);
@@ -279,6 +314,12 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
         }
     }
 
+    /**
+     * 比较特殊的是，Exception Caught 事件在 pipeline 的起始节点，
+     * 不是 head 头节点，而是发生异常的当前节点开始。怎么理解好呢？对于在 pipeline
+     * 上传播的 Inbound xxx 事件，在发生异常后，转化成 Exception Caught 事件，继续从当前节点，继续向下传播。
+     * @param cause
+     */
     private void invokeExceptionCaught(final Throwable cause) {
         if (invokeHandler()) {
             try {
@@ -475,16 +516,26 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
         if (localAddress == null) {
             throw new NullPointerException("localAddress");
         }
+        /**
+         * 判断是否为合法的Promise对象
+         */
         if (isNotValidPromise(promise, false)) {
             // cancelled
             return promise;
         }
-
+        // 获得下一个Outbound节点
         final AbstractChannelHandlerContext next = findContextOutbound();
+        // 获得下一个节点的执行器
         EventExecutor executor = next.executor();
         if (executor.inEventLoop()) {
+            /**
+             * 调用下一个context节点的invokeBind函数
+             */
             next.invokeBind(localAddress, promise);
         } else {
+            /**
+             * 不在eventloop现场，提交到 EventLoop 的线程中执行
+             */
             safeExecute(executor, new Runnable() {
                 @Override
                 public void run() {
@@ -496,13 +547,23 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
     }
 
     private void invokeBind(SocketAddress localAddress, ChannelPromise promise) {
+        /**
+         * 判断是否为符合标准的handler
+         */
         if (invokeHandler()) {
             try {
+                /**
+                 * 调用该channelHandler的bind方法
+                 */
                 ((ChannelOutboundHandler) handler()).bind(this, localAddress, promise);
             } catch (Throwable t) {
+                /**
+                 * 通知outbound事件传播异常
+                 */
                 notifyOutboundHandlerException(t, promise);
             }
         } else {
+            // 跳过，到传递给下一个节点
             bind(localAddress, promise);
         }
     }
@@ -877,10 +938,17 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
     private static void notifyOutboundHandlerException(Throwable cause, ChannelPromise promise) {
         // Only log if the given promise is not of type VoidChannelPromise as tryFailure(...) is expected to return
         // false.
+        /**
+         * 通知 bind 事件对应的 Promise 对应的监听者们
+         */
         PromiseNotificationUtil.tryFailure(promise, cause, promise instanceof VoidChannelPromise ? null : logger);
     }
 
     private void notifyHandlerException(Throwable cause) {
+        /**
+         *  如果是在 `ChannelHandler#exceptionCaught(
+         *  ChannelHandlerContext ctx, Throwable cause)` 方法中，仅打印错误日志。否则会形成死
+         */
         if (inExceptionCaught(cause)) {
             if (logger.isWarnEnabled()) {
                 logger.warn(
@@ -941,7 +1009,7 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
         if (promise == null) {
             throw new NullPointerException("promise");
         }
-
+        // promise已经完成
         if (promise.isDone()) {
             // Check if the promise was cancelled and if so signal that the processing of the operation
             // should not be performed.
@@ -952,21 +1020,21 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
             }
             throw new IllegalArgumentException("promise already done: " + promise);
         }
-
+        // promise不符合
         if (promise.channel() != channel()) {
             throw new IllegalArgumentException(String.format(
                     "promise.channel does not match: %s (expected: %s)", promise.channel(), channel()));
         }
-
+        // DefaultChannelPromise 合法
         if (promise.getClass() == DefaultChannelPromise.class) {
             return false;
         }
-
+        // 禁止 VoidChannelPromise
         if (!allowVoidPromise && promise instanceof VoidChannelPromise) {
             throw new IllegalArgumentException(
                     StringUtil.simpleClassName(VoidChannelPromise.class) + " not allowed for this operation");
         }
-
+        // 禁止 CloseFuture
         if (promise instanceof AbstractChannel.CloseFuture) {
             throw new IllegalArgumentException(
                     StringUtil.simpleClassName(AbstractChannel.CloseFuture.class) + " not allowed in a pipeline");
@@ -974,6 +1042,10 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
         return false;
     }
 
+    /**
+     * 循环，向后获得一个 Inbound 节点
+     * @return
+     */
     private AbstractChannelHandlerContext findContextInbound() {
         AbstractChannelHandlerContext ctx = this;
         do {
@@ -982,8 +1054,16 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
         return ctx;
     }
 
+    /**
+     * 获得下一个outbound的节点
+     * @return
+     */
     private AbstractChannelHandlerContext findContextOutbound() {
         AbstractChannelHandlerContext ctx = this;
+        /**
+         * 循环，向前获得一个 Outbound 节点
+         * 因为是从tail开始传递的，所以要向前传递
+         */
         do {
             ctx = ctx.prev;
         } while (!ctx.outbound);
@@ -999,7 +1079,12 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
         handlerState = REMOVE_COMPLETE;
     }
 
+    /**
+     * 设置ChannelHandler添加的结果
+     * 循环 + CAS 保证多线程下的安全变更 handlerState 属性
+     */
     final void setAddComplete() {
+
         for (;;) {
             int oldState = handlerState;
             // Ensure we never update when the handlerState is REMOVE_COMPLETE already.
@@ -1047,12 +1132,16 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
 
     private static boolean safeExecute(EventExecutor executor, Runnable runnable, ChannelPromise promise, Object msg) {
         try {
+            /**
+             * 提交EventLoop的线程中，进行执行任务
+             */
             executor.execute(runnable);
             return true;
         } catch (Throwable cause) {
             try {
                 promise.setFailure(cause);
             } finally {
+                // 释放msg相关的消息
                 if (msg != null) {
                     ReferenceCountUtil.release(msg);
                 }

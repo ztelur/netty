@@ -61,6 +61,9 @@ public final class PromiseNotificationUtil {
      * Try to mark the {@link Promise} as failure and log if {@code logger} is not {@code null} in case this fails.
      */
     public static void tryFailure(Promise<?> p, Throwable cause, InternalLogger logger) {
+        /**
+         * 就会通知该监听器，对该异常做进一步自定义的处理。也就是说，该异常不会在 pipeline 中传播。
+         */
         if (!p.tryFailure(cause) && logger != null) {
             Throwable err = p.cause();
             if (err == null) {
