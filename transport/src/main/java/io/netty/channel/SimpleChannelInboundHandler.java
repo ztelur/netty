@@ -97,17 +97,33 @@ public abstract class SimpleChannelInboundHandler<I> extends ChannelInboundHandl
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+        /**
+         * 是否要释放消息
+         */
         boolean release = true;
         try {
+            /**
+             * 判断是否为匹配的消息
+             */
             if (acceptInboundMessage(msg)) {
                 @SuppressWarnings("unchecked")
                 I imsg = (I) msg;
+                /**
+                 * 处理消息
+                 */
                 channelRead0(ctx, imsg);
             } else {
+                /**
+                 * 不需要释放消息
+                 */
                 release = false;
+                /**
+                 * 释放channel read到下一个节点
+                 */
                 ctx.fireChannelRead(msg);
             }
         } finally {
+            // 判断是否要释放消息
             if (autoRelease && release) {
                 ReferenceCountUtil.release(msg);
             }

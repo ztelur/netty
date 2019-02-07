@@ -55,6 +55,11 @@ public abstract class ChannelInitializer<C extends Channel> extends ChannelInbou
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(ChannelInitializer.class);
     // We use a ConcurrentMap as a ChannelInitializer is usually shared between all Channels in a Bootstrap /
     // ServerBootstrap. This way we can reduce the memory usage compared to use Attributes.
+    /**
+     * 由于 ChannelInitializer 可以在 Bootstrap/ServerBootstrap 的所有通道中共享，
+     * 所以我们用一个 ConcurrentMap 作为初始化器。
+     *  * 这种方式，相对于使用方式，减少了内存的使用。
+     */
     private final ConcurrentMap<ChannelHandlerContext, Boolean> initMap = PlatformDependent.newConcurrentHashMap();
 
     /**
@@ -73,12 +78,20 @@ public abstract class ChannelInitializer<C extends Channel> extends ChannelInbou
     public final void channelRegistered(ChannelHandlerContext ctx) throws Exception {
         // Normally this method will never be called as handlerAdded(...) should call initChannel(...) and remove
         // the handler.
+        /**
+         * 初始化channel
+         */
         if (initChannel(ctx)) {
+            /**
+             * 初始化，重新触发 Channel Registered 事件。因为，很有可能添加了新的 ChannelHandler 到 pipeline 中
+             */
             // we called initChannel(...) so we need to call now pipeline.fireChannelRegistered() to ensure we not
             // miss an event.
+            // 触发channelRegistered事件
             ctx.pipeline().fireChannelRegistered();
         } else {
             // Called initChannel(...) before which is the expected behavior, so just forward the event.
+            // 继续向下一个节点的 Channel Registered 事件
             ctx.fireChannelRegistered();
         }
     }
@@ -99,6 +112,7 @@ public abstract class ChannelInitializer<C extends Channel> extends ChannelInbou
      */
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
+        // 已经注册
         if (ctx.channel().isRegistered()) {
             // This should always be true with our current DefaultChannelPipeline implementation.
             // The good thing about calling initChannel(...) in handlerAdded(...) is that there will be no ordering
@@ -110,16 +124,23 @@ public abstract class ChannelInitializer<C extends Channel> extends ChannelInbou
 
     @SuppressWarnings("unchecked")
     private boolean initChannel(ChannelHandlerContext ctx) throws Exception {
+        /**
+         * guard against re-entrance 解决并发问题
+         */
         if (initMap.putIfAbsent(ctx, Boolean.TRUE) == null) { // Guard against re-entrance.
             try {
+                // 初始化通道
                 initChannel((C) ctx.channel());
             } catch (Throwable cause) {
+                // 发生异常时，执行异常处理
                 // Explicitly call exceptionCaught(...) as we removed the handler before calling initChannel(...).
                 // We do so to prevent multiple calls to initChannel(...).
                 exceptionCaught(ctx, cause);
             } finally {
+                // 从pipeline移除channelIn
                 remove(ctx);
             }
+            // 初始化成功
             return true;
         }
         return false;
